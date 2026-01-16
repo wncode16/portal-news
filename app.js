@@ -1,8 +1,8 @@
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => document.querySelectorAll(sel);
 
-const GNEWS_KEY = "SUA_CHAVE_AQUI"; // ⚠️ ficará exposta no navegador
-const GNEWS_BASE = "https://gnews.io/api/v4";
+const GNEWS_KEY = "071421"; // ⚠️ ficará exposta no navegador
+const PROXY_NEWS = "/.netlify/functions/news";
 
 const state = {
   category: "Todas",
