@@ -3,6 +3,12 @@ const $$ = (sel) => document.querySelectorAll(sel);
 
 const GNEWS_KEY = "071421"; // ⚠️ ficará exposta no navegador
 const PROXY_NEWS = "/.netlify/functions/news";
+const url = state.query.trim()
+  ? `${PROXY_NEWS}?q=${encodeURIComponent(state.query.trim())}&max=18`
+  : `${PROXY_NEWS}?category=${encodeURIComponent(categoryMap[state.category] || "general")}&max=18`;
+
+const res = await fetch(url);
+
 
 const state = {
   category: "Todas",
