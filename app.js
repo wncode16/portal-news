@@ -1,283 +1,130 @@
-const $ = (sel) => document.querySelector(sel);
-const $$ = (sel) => document.querySelectorAll(sel);
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Portal News — Notícias em tempo real</title>
+  <meta name="description" content="Portal News: últimas notícias, política, economia, esportes, tecnologia, mundo e entretenimento." />
+  <meta name="theme-color" content="#0b1220" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
 
-const GNEWS_KEY = "071421"; // ⚠️ ficará exposta no navegador
-const PROXY_NEWS = "/.netlify/functions/news";
-const url = state.query.trim()
-  ? `${PROXY_NEWS}?q=${encodeURIComponent(state.query.trim())}&max=18`
-  : `${PROXY_NEWS}?category=${encodeURIComponent(categoryMap[state.category] || "general")}&max=18`;
+<body>
+  <a class="skip-link" href="#conteudo">Pular para o conteúdo</a>
 
-const res = await fetch(url);
-
-
-const state = {
-  category: "Todas",
-  query: "",
-  theme: localStorage.getItem("pn_theme") || "dark",
-  articles: [],
-};
-
-const categoryMap = {
-  "Todas": "general",
-  "Brasil": "nation",
-  "Mundo": "world",
-  "Economia": "business",
-  "Tecnologia": "technology",
-  "Esportes": "sports",
-  "Entretenimento": "entertainment",
-};
-
-function setTheme(theme){
-  state.theme = theme;
-  document.documentElement.setAttribute("data-theme", theme);
-  localStorage.setItem("pn_theme", theme);
-  $("#themeBtn").textContent = theme === "dark" ? "🌙" : "☀️";
-}
-
-function escapeHtml(str){
-  return String(str ?? "")
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
-}
-
-function fmtDate(iso){
-  try {
-    const d = new Date(iso);
-    return d.toLocaleDateString("pt-BR", { day:"2-digit", month:"short", year:"numeric" });
-  } catch { return ""; }
-}
-
-function formatKicker(a){
-  return `${a.category} • ${a.date} • ${a.minutes} min`;
-}
-
-function estimateReadMinutes(text){
-  const words = (text || "").trim().split(/\s+/).filter(Boolean).length;
-  return Math.max(2, Math.round(words / 180));
-}
-
-async function fetchGNews(){
-  const lang = "pt";
-  const country = "br";
-  const max = 18;
-
-  // Se tiver busca, usa o Search Endpoint; senão Top Headlines
-  let url;
-  if (state.query.trim()){
-    const q = encodeURIComponent(state.query.trim());
-    url = `${GNEWS_BASE}/search?q=${q}&lang=${lang}&country=${country}&max=${max}&apikey=${GNEWS_KEY}`;
-  } else {
-    const cat = categoryMap[state.category] || "general";
-    url = `${GNEWS_BASE}/top-headlines?category=${cat}&lang=${lang}&country=${country}&max=${max}&apikey=${GNEWS_KEY}`;
-  }
-
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`Erro API (${res.status})`);
-  const data = await res.json();
-
-  // Mapeia pro formato do seu site
-  const mapped = (data.articles || []).map((x, idx) => ({
-    id: x.url || `${Date.now()}-${idx}`,
-    category: state.category === "Todas" ? (x.source?.name ? "Geral" : "Geral") : state.category,
-    title: x.title || "Sem título",
-    excerpt: x.description || x.content || "Sem descrição.",
-    author: x.source?.name || "Fonte",
-    minutes: estimateReadMinutes(`${x.title} ${x.description} ${x.content}`),
-    date: fmtDate(x.publishedAt) || "",
-    trending: idx < 5,
-    url: x.url,
-    image: x.image
-  }));
-
-  state.articles = mapped;
-  window.NEWS_DATA.lastUpdate = new Date().toLocaleString("pt-BR");
-  window.NEWS_DATA.articles = mapped;
-}
-
-function renderHero(article){
-  const hero = $("#heroCard");
-  hero.classList.remove("skeleton");
-  hero.innerHTML = `
-    <div class="hero-top">
-      <span class="badge">Destaque</span>
-      <span class="muted">${escapeHtml(formatKicker(article))}</span>
-    </div>
-    <h1 class="hero-title">${escapeHtml(article.title)}</h1>
-    <p class="hero-desc">${escapeHtml(article.excerpt)}</p>
-
-    <div class="hero-meta">
-      <span class="pill">Fonte: ${escapeHtml(article.author)}</span>
-      <span class="pill">${escapeHtml(article.date)}</span>
-    </div>
-
-    <div class="hero-actions">
-      <button class="btn" type="button" data-open="${escapeHtml(article.id)}">Abrir matéria</button>
-      <button class="btn secondary" type="button" data-share="${escapeHtml(article.id)}">Compartilhar</button>
-    </div>
-  `;
-}
-
-function renderTrending(list){
-  const trending = $("#trendingList");
-  trending.innerHTML = "";
-  const items = list.slice(0, 5);
-  $("#trendingCount").textContent = `${items.length} tópicos`;
-
-  items.forEach((a) => {
-    const li = document.createElement("li");
-    li.innerHTML = `
-      <a href="#" data-open="${escapeHtml(a.id)}">
-        <strong>${escapeHtml(a.title)}</strong>
-        <div class="muted" style="font-size:12px; margin-top:2px;">${escapeHtml(a.author)} • ${escapeHtml(a.date)}</div>
-      </a>
-    `;
-    trending.appendChild(li);
-  });
-}
-
-function renderCards(list){
-  const cards = $("#cards");
-  const empty = $("#emptyState");
-  cards.innerHTML = "";
-
-  if (!list.length){
-    empty.classList.remove("hidden");
-    return;
-  }
-  empty.classList.add("hidden");
-
-  list.forEach((a) => {
-    const el = document.createElement("article");
-    el.className = "card";
-    const bg = a.image ? `style="background-image:url('${a.image}'); background-size:cover; background-position:center;"` : "";
-    el.innerHTML = `
-      <div class="thumb" ${bg}>
-        <span class="kicker"><span class="dot"></span>${escapeHtml(formatKicker(a))}</span>
-      </div>
-      <div class="body">
-        <h3>${escapeHtml(a.title)}</h3>
-        <p>${escapeHtml(a.excerpt)}</p>
-
-        <div class="bottom">
-          <span>${escapeHtml(a.author)}</span>
-          <a class="read" href="#" data-open="${escapeHtml(a.id)}">Abrir →</a>
+  <header class="site-header">
+    <div class="container header-grid">
+      <div class="brand">
+        <div class="logo" aria-hidden="true">PN</div>
+        <div class="brand-text">
+          <div class="brand-name">Portal News</div>
+          <div class="brand-tagline">Tudo o que importa, em um só lugar</div>
         </div>
       </div>
-    `;
-    cards.appendChild(el);
-  });
-}
 
-function applyFilters(){
-  // Agora os filtros principais já vêm do endpoint,
-  // mas ainda dá pra contar e renderizar aqui.
-  const filtered = window.NEWS_DATA.articles.slice();
+      <nav class="nav" aria-label="Navegação principal">
+        <button id="menuBtn" class="icon-btn mobile-only" aria-expanded="false" aria-controls="menu">
+          ☰ <span class="sr-only">Abrir menu</span>
+        </button>
 
-  $("#sectionTitle").textContent = state.category === "Todas" ? "Últimas" : state.category;
-  $("#resultsCount").textContent = `${filtered.length} resultado(s)`;
-  $("#lastUpdate").textContent = `Atualizado: ${window.NEWS_DATA.lastUpdate || "-"}`;
+        <div id="menu" class="menu">
+          <button class="chip active" data-category="Todas">Todas</button>
+          <button class="chip" data-category="Brasil">Brasil</button>
+          <button class="chip" data-category="Mundo">Mundo</button>
+          <button class="chip" data-category="Economia">Economia</button>
+          <button class="chip" data-category="Tecnologia">Tecnologia</button>
+          <button class="chip" data-category="Esportes">Esportes</button>
+          <button class="chip" data-category="Entretenimento">Entretenimento</button>
+        </div>
+      </nav>
 
-  renderCards(filtered);
-}
+      <div class="actions">
+        <label class="search" aria-label="Buscar notícias">
+          <span aria-hidden="true">🔎</span>
+          <input id="searchInput" type="search" placeholder="Buscar (ex: inflação, IA, futebol)..." autocomplete="off" />
+        </label>
 
-function setActiveChip(category){
-  $$(".chip").forEach(btn => {
-    btn.classList.toggle("active", btn.dataset.category === category);
-  });
-}
+        <button id="themeBtn" class="icon-btn" type="button" aria-label="Alternar tema">
+          🌙
+        </button>
+      </div>
+    </div>
+  </header>
 
-function openArticle(id){
-  const a = window.NEWS_DATA.articles.find(x => x.id === id);
-  if (!a?.url) return;
-  window.open(a.url, "_blank", "noopener,noreferrer");
-}
+  <main id="conteudo" class="container">
+    <section class="hero" aria-label="Manchete principal">
+      <div id="heroCard" class="hero-card skeleton" role="status" aria-live="polite">
+        Carregando manchete...
+      </div>
 
-function shareArticle(id){
-  const a = window.NEWS_DATA.articles.find(x => x.id === id);
-  if (!a?.url) return;
+      <aside class="sidebar" aria-label="Em alta">
+        <div class="panel">
+          <div class="panel-header">
+            <h2>Em alta</h2>
+            <span class="muted" id="trendingCount"></span>
+          </div>
+          <ol id="trendingList" class="trending-list"></ol>
+        </div>
 
-  if (navigator.share){
-    navigator.share({ title: a.title, url: a.url });
-  } else {
-    navigator.clipboard?.writeText(a.url);
-    alert("Link copiado:\n\n" + a.url);
-  }
-}
+        <div class="panel newsletter">
+          <h2>Newsletter</h2>
+          <p class="muted">Receba um resumo diário (exemplo de formulário).</p>
+          <form id="newsletterForm">
+            <input type="email" required placeholder="seuemail@exemplo.com" aria-label="Seu e-mail" />
+            <button type="submit">Inscrever</button>
+          </form>
+          <p id="newsletterMsg" class="muted" role="status" aria-live="polite"></p>
+        </div>
+      </aside>
+    </section>
 
-function setupEvents(){
-  $$(".chip").forEach(btn => {
-    btn.addEventListener("click", async () => {
-      state.category = btn.dataset.category;
-      setActiveChip(state.category);
-      await refresh();
-      $("#menu").classList.remove("open");
-      $("#menuBtn").setAttribute("aria-expanded", "false");
-    });
-  });
+    <section class="section-head">
+      <h2 id="sectionTitle">Últimas</h2>
+      <div class="meta">
+        <span class="pill" id="resultsCount"></span>
+        <span class="pill" id="lastUpdate"></span>
+      </div>
+    </section>
 
-  $("#searchInput").addEventListener("change", async (e) => {
-    state.query = e.target.value;
-    await refresh();
-  });
+    <section aria-label="Lista de notícias">
+      <div id="cards" class="cards"></div>
+      <div id="emptyState" class="empty-state hidden">
+        <h3>Nenhum resultado</h3>
+        <p class="muted">Tente outra busca ou selecione outra categoria.</p>
+      </div>
+    </section>
 
-  document.body.addEventListener("click", (e) => {
-    const open = e.target.closest("[data-open]");
-    const share = e.target.closest("[data-share]");
-    if (open){ e.preventDefault(); openArticle(open.dataset.open); }
-    if (share){ e.preventDefault(); shareArticle(share.dataset.share); }
+    <footer class="footer">
+      <div class="footer-grid">
+        <div>
+          <div class="footer-title">Portal News</div>
+          <p class="muted">Projeto estático (HTML/CSS/JS) — pronto para GitHub Pages, Netlify ou Vercel.</p>
+        </div>
+        <div>
+          <div class="footer-title">Seções</div>
+          <ul class="footer-links">
+            <li><a href="#" data-footer-category="Brasil">Brasil</a></li>
+            <li><a href="#" data-footer-category="Mundo">Mundo</a></li>
+            <li><a href="#" data-footer-category="Economia">Economia</a></li>
+            <li><a href="#" data-footer-category="Tecnologia">Tecnologia</a></li>
+          </ul>
+        </div>
+        <div>
+          <div class="footer-title">Contato</div>
+          <ul class="footer-links">
+            <li><a href="#" aria-label="Contato">contato@portalnews.exemplo</a></li>
+            <li><a href="#" aria-label="Anunciar">anuncie@portalnews.exemplo</a></li>
+          </ul>
+        </div>
+      </div>
+      <div class="copyright">
+        <span>© <span id="year"></span> Portal News</span>
+        <span class="muted">• Conteúdo de exemplo</span>
+      </div>
+    </footer>
+  </main>
 
-    const footer = e.target.closest("[data-footer-category]");
-    if (footer){
-      e.preventDefault();
-      state.category = footer.dataset.footerCategory;
-      setActiveChip(state.category);
-      refresh();
-      window.scrollTo({ top: 0, behavior: "smooth" });
-    }
-  });
-
-  $("#themeBtn").addEventListener("click", () => {
-    setTheme(state.theme === "dark" ? "light" : "dark");
-  });
-
-  $("#menuBtn").addEventListener("click", () => {
-    const menu = $("#menu");
-    const isOpen = menu.classList.toggle("open");
-    $("#menuBtn").setAttribute("aria-expanded", String(isOpen));
-  });
-
-  $("#newsletterForm").addEventListener("submit", (e) => {
-    e.preventDefault();
-    $("#newsletterMsg").textContent = "Inscrição registrada (exemplo).";
-    e.target.reset();
-  });
-}
-
-async function refresh(){
-  $("#heroCard").classList.add("skeleton");
-  $("#heroCard").textContent = "Carregando...";
-  try{
-    await fetchGNews();
-    const heroPick = window.NEWS_DATA.articles[0];
-    if (heroPick) renderHero(heroPick);
-    renderTrending(window.NEWS_DATA.articles.slice(0, 5));
-    applyFilters();
-  } catch (err){
-    $("#heroCard").classList.remove("skeleton");
-    $("#heroCard").innerHTML = `<strong>Erro ao carregar notícias:</strong><div class="muted" style="margin-top:6px;">${escapeHtml(err.message)}</div>`;
-    $("#cards").innerHTML = "";
-    $("#emptyState").classList.remove("hidden");
-  }
-}
-
-function init(){
-  setTheme(state.theme);
-  $("#year").textContent = new Date().getFullYear();
-  setupEvents();
-  refresh();
-}
-
-init();
+  <script src="data.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
